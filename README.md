@@ -51,3 +51,8 @@ VMSilentBot is an automation project using Selenium.
 - Ensure that you have correctly configured `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the `silentbot.py` file.
 - If you encounter errors, review the installation steps or contact support.
 
+## Support Us
+- **Donate (EVM)**: `0xfa98dc932041755636ed44a4e2455c33b2378ca9`
+- **Join Telegram**: [https://t.me/ReReGuide](https://t.me/ReReGuide)
+- **Follow on X**: [https://x.com/HeosRe](https://x.com/HeosRe)
+
