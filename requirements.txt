@@ -1,0 +1,5 @@
+requests
+python-telegram-bot
+urllib3==1.26.18
+selenium==4.18.1
+httpx[http2]
