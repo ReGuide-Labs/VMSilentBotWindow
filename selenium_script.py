@@ -114,7 +114,7 @@ def automation_interact(driver, profile, interval=10):
             if "ogps" in text_ogp or "your time" not in text_wait:
                 log(profile, "Text 'OGPs earned' found or exited queue, starting button search.")
 
-                button_clicked = False
+                button_found = False
                 for i in range(1, 11):
                     block_xpath = f'//*[@id="__next"]/main/div/div[2]/div[{i}]'
                     try:
@@ -127,13 +127,23 @@ def automation_interact(driver, profile, interval=10):
                             button_element = driver.find_element(By.XPATH, button_xpath)
                             button_element.click()
                             
-                            time.sleep(10)
+                            time.sleep(2)
+                            button_element.click()
+                            
+                            time.sleep(3)
+                            button_element.click()
                             log(profile, f"Đã click button ở block {i}.")
-                            button_clicked = True
+                            
+                            button_found = True
+                            time.sleep(10)
 
                             continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
                             continue_button = driver.find_element(By.XPATH, continue_button_xpath)
-
+                            if continue_button:
+                                if "continue" not in continue_button.text.lower():
+                                    button_element.click()
+                                    time.sleep(10)
+                                
                             if "continue" in continue_button.text.lower():
                                 log(profile, "Continue button found. Bắt đầu random mouse move...")
                                 perform_random_interactions_and_submit(driver, profile)
@@ -141,19 +151,15 @@ def automation_interact(driver, profile, interval=10):
 
                         except Exception as e:
                             log(profile, f"Block {i} already contributed, retrying next contribute...")
-                            driver.get("https://ceremony.silentprotocol.org/ceremonies")
                             continue
                     except:
                         pass
 
-                if not button_clicked:
+                if not button_found:
                     log(profile, "Không tìm thấy button nào, reload trang.")
                     driver.get("https://ceremony.silentprotocol.org/ceremonies")
                     continue
-
             else:
-                log(profile, "Not ready - 'OGPs earned' not found or still in queue.")
-
                 input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
                 try:
                     driver.find_element(By.XPATH, input_xpath)
@@ -161,28 +167,48 @@ def automation_interact(driver, profile, interval=10):
                     driver.get("https://ceremony.silentprotocol.org/ceremonies")
                     continue
                 except:
-                    log(profile, "Không thấy input. Kiểm tra exit hoặc success...")
-
-                exit_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div/button'
-                try:
-                    exit_button = driver.find_element(By.XPATH, exit_button_xpath)
-                    exit_button.click()
-                    log(profile, "Click Exit button -> Quit driver.")
-                    driver.quit()
-                    break
-                except:
-                    log(profile, "Không thấy Exit button, kiểm tra 'successfully uploaded'.")
-                try:
-                    success_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]'
-                    success_text_element = driver.find_element(By.XPATH, success_text_xpath)
-                    if "successfully uploaded" in success_text_element.get_attribute('innerText'):
-                        log(profile, "Successfully exited or uploaded.")
-                        driver.quit()
-                        break
-                except:
-                    log(profile, "Chưa thấy 'successfully uploaded'. Chờ 30s...")
+                    log(profile, "Không thấy input. Kiểm tra exit hoặc success...")        
                     
         except Exception as e:
+            log(profile, "Not ready - 'OGPs earned' not found or still in queue.")
+
+            exit_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div/button'
+            try:
+                exit_button = driver.find_element(By.XPATH, exit_button_xpath)
+                exit_button.click()
+                log(profile, "Click Exit button -> Quit driver.")
+                driver.quit()
+                break
+            except:
+                log(profile, "Không thấy Exit button, kiểm tra 'successfully uploaded'.")
+            try:
+                success_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]'
+                proccessed_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div/p'
+                success_text_element = None
+                proccessed_text_element = None
+
+                try:
+                    success_text_element = driver.find_element(By.XPATH, success_text_xpath)
+                except:
+                    pass
+
+                try:
+                    proccessed_text_element = driver.find_element(By.XPATH, proccessed_text_xpath)
+                except:
+                    pass
+
+                if success_text_element and "successfully uploaded" in success_text_element.get_attribute('innerText'):
+                    log(profile, "Successfully exited or uploaded.")
+                    driver.quit()
+                    break
+
+                if proccessed_text_element and "processed" in proccessed_text_element.get_attribute('innerText').lower():
+                    log(profile, "Processed text found, exiting driver.")
+                    driver.quit()
+                    break
+            except:
+                log(profile, "Chưa thấy 'successfully uploaded'. Chờ 30s...")
+                
             if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower():
                 log(profile, "Driver is closed -> Break automation_interact.")
                 break
