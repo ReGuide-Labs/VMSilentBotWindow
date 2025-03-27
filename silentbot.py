@@ -3,11 +3,11 @@ import time
 import random
 import threading
 from telegram import Bot
-from selenium_helper import run_selenium
 from selenium_script import contribute, automation_interact, run_profiles  # Import từ file chứa selenium
 import http.client
 import json
 import asyncio  # Add this import
+from selenium_helper import logger  # Use logger from helper
 
 def worker_function(token, name):
     while True:
@@ -23,14 +23,14 @@ def worker_function(token, name):
 
             if position_result['behind'] == 0:
                 if not getattr(worker_function, f"{token}_automation_started", False):
-                    print(f"{name} is starting run_automation in a new thread")
+                    logger.info(f"{name} is starting run_automation in a new thread")
                     threading.Thread(target=run_automation, args=(token, name)).start()
                     setattr(worker_function, f"{token}_automation_started", True)
 
         else:
             message += "Error fetching data"
 
-        print(message)
+        logger.info(message)
         time.sleep(10)  # Add a 10-second delay before the next iteration
 
 def start_worker_threads(tokens):
@@ -54,9 +54,9 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 async def send_telegram_message(message):
     try:
         await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, message_thread_id=MESSAGE_THREAD_ID)
-        print("Message sent to Telegram successfully.")
+        logger.info("Message sent to Telegram successfully.")
     except Exception as e:
-        print(f"Error sending message to Telegram: {e}")
+        logger.error(f"Error sending message to Telegram: {e}")
 
 import httpx
 
@@ -77,7 +77,10 @@ def send_request(url, token):
     try:
         with httpx.Client(http2=True, timeout=timeout) as client:
             response = client.get(url, headers=headers)
-            print(f"✅ Status: {response.status_code} - {url}")
+            if response.status_code == 200:
+                logger.info(f"✅ Success: {response.status_code} - {url}")
+            else:
+                logger.warning(f"⚠️ Status: {response.status_code} - {url}")
 
             if response.status_code == 304:
                 return {"behind": -1, "timeRemaining": "N/A"} 
@@ -85,9 +88,9 @@ def send_request(url, token):
             return response.json()
 
     except httpx.RequestError as e:
-        print(f"❌ Request error: {e}")
+        logger.error(f"❌ Request error: {e}")
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        logger.error(f"❌ Unexpected error: {e}")
 
     return None
 
@@ -102,10 +105,10 @@ def load_tokens():
     try:
         with open('token.txt', 'r') as file:
             tokens = [line.strip() for line in file if line.strip()]
-        print(f"Loaded {len(tokens)} token(s).")
+        logger.info(f"Loaded {len(tokens)} token(s).")
         return tokens
     except Exception as e:
-        print(f"Error: Cannot read file token.txt! {e}")
+        logger.error(f"Error: Cannot read file token.txt! {e}")
         return []
 
 

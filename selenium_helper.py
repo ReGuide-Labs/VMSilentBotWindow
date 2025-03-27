@@ -1,3 +1,8 @@
-def run_selenium(contribute, automation_interact, *args):
-    driver = contribute(*args)
-    automation_interact(driver)
+import logging
+
+# Configure logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)

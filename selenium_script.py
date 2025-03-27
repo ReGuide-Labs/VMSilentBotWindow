@@ -4,6 +4,7 @@ import random
 import time
 import threading
 import ctypes
+import logging
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -14,10 +15,11 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+# Configure logger
+from selenium_helper import logger
 
 def log(profile, message):
-    print(f"[Profile: {profile}] {message}")
-
+    logger.info(f"[Profile: {profile}] {message}")
 
 def contribute(silent_jwt, profile):
 
@@ -30,7 +32,7 @@ def contribute(silent_jwt, profile):
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.88 Safari/537.36"
 
     options = Options()
-    options.add_argument("--headless=new")
+    # options.add_argument("--headless=new")
     options.add_argument(f"--user-data-dir={profile_path}")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--no-sandbox")
@@ -59,7 +61,7 @@ def contribute(silent_jwt, profile):
     driver.execute_script(f"window.localStorage.setItem('silent_jwt', '{silent_jwt}');")
 
     driver.get("https://ceremony.silentprotocol.org/ceremonies")
-    log(profile, "Đã mở trang và thiết lập silent_jwt thành công.")
+    log(profile, "Successfully opened page and set silent_jwt.")
 
     return driver
 
@@ -110,7 +112,7 @@ def automation_interact(driver, profile, interval=10):
                 text_ogp = found_element.text.lower()
                 print("Element ogps_earned_xpath đã xuất hiện trước:", found_element.text)
             if "ogps" in text_ogp or "your time" not in text_wait:
-                log(profile, "Text 'OGPs earned' found hoặc đã thoát queue, bắt đầu tìm button.")
+                log(profile, "Text 'OGPs earned' found or exited queue, starting button search.")
 
                 button_clicked = False
                 for i in range(1, 11):
@@ -120,65 +122,27 @@ def automation_interact(driver, profile, interval=10):
                         log(profile, f"Tìm thấy block {i}: {element.text}")
 
                         button_xpath = f'//*[@id="__next"]/main/div/div[2]/div[{i}]/div[2]/div[2]/button'
-                        span_xpath = f'//*[@id="__next"]/main/div/div[2]/div[{i}]/div[2]/div[2]/span/div'
 
                         try:
-                            button_element = wait.until(
-                                EC.element_to_be_clickable((By.XPATH, button_xpath))
-                            )
+                            button_element = driver.find_element(By.XPATH, button_xpath)
                             button_element.click()
+                            
+                            time.sleep(10)
                             log(profile, f"Đã click button ở block {i}.")
                             button_clicked = True
 
                             continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
-                            continue_button = wait.until(
-                                EC.element_to_be_clickable((By.XPATH, continue_button_xpath))
-                            )
+                            continue_button = driver.find_element(By.XPATH, continue_button_xpath)
 
                             if "continue" in continue_button.text.lower():
                                 log(profile, "Continue button found. Bắt đầu random mouse move...")
-
-                                end_time = time.time() + 5
-                                while time.time() < end_time:
-                                    rand_index = random.randint(1, 1680)
-                                    random_xpath = f'//*[@id="__next"]/div[1]/div[2]/div[1]/div[{rand_index}]'
-                                    try:
-                                        random_element = driver.find_element(By.XPATH, random_xpath)
-                                        ActionChains(driver).move_to_element(random_element).perform()
-                                    except:
-                                        pass
-                                    time.sleep(0.1)
-
-                                continue_button.click()
-                                log(profile, "Đã click Continue.")
-                                time.sleep(2)
-
-                                input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
-                                input_element = wait.until(
-                                    EC.presence_of_element_located((By.XPATH, input_xpath))
-                                )
-                                random_text = ''.join(random.choices(
-                                    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10
-                                ))
-                                input_element.send_keys(random_text)
-                                log(profile, f"Nhập text ngẫu nhiên: {random_text}")
-
-                                final_button_xpath = '//*[@id="__next"]/div[1]/main/div/div[2]/button[1]'
-                                final_button = wait.until(
-                                    EC.element_to_be_clickable((By.XPATH, final_button_xpath))
-                                )
-                                final_button.click()
-                                log(profile, "Đã click final button.")
+                                perform_random_interactions_and_submit(driver, profile)
+                                break
 
                         except Exception as e:
-                            log(profile, f"Lỗi click button ở block {i}: {e}")
-
-                        try:
-                            span_element = driver.find_element(By.XPATH, span_xpath)
-                            log(profile, f"Span ở block {i}: {span_element.text}")
-                        except:
-                            pass
-
+                            log(profile, f"Block {i} already contributed, retrying next contribute...")
+                            driver.get("https://ceremony.silentprotocol.org/ceremonies")
+                            continue
                     except:
                         pass
 
@@ -188,7 +152,7 @@ def automation_interact(driver, profile, interval=10):
                     continue
 
             else:
-                log(profile, "Chưa sẵn sàng - Chưa có 'OGPs earned' hoặc vẫn trong queue.")
+                log(profile, "Not ready - 'OGPs earned' not found or still in queue.")
 
                 input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
                 try:
@@ -208,26 +172,56 @@ def automation_interact(driver, profile, interval=10):
                     break
                 except:
                     log(profile, "Không thấy Exit button, kiểm tra 'successfully uploaded'.")
-
                 try:
                     success_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]'
                     success_text_element = driver.find_element(By.XPATH, success_text_xpath)
                     if "successfully uploaded" in success_text_element.get_attribute('innerText'):
-                        log(profile, "'successfully uploaded' -> Quit driver.")
+                        log(profile, "Successfully exited or uploaded.")
                         driver.quit()
                         break
                 except:
                     log(profile, "Chưa thấy 'successfully uploaded'. Chờ 30s...")
-
+                    
         except Exception as e:
             if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower():
                 log(profile, "Driver is closed -> Break automation_interact.")
                 break
-            log(profile, f"Đang kiểm tra hàng chờ queue...")
+            log(profile, f"Error while checking queue: {e}")
 
         time.sleep(interval)
+        
+def perform_random_interactions_and_submit(driver, profile):
+    end_time = time.time() + 5
+    while time.time() < end_time:
+        rand_index = random.randint(1, 1680)
+        random_xpath = f'//*[@id="__next"]/div[1]/div[2]/div[1]/div[{rand_index}]'
+        try:
+            random_element = driver.find_element(By.XPATH, random_xpath)
+            ActionChains(driver).move_to_element(random_element).perform()
+        except:
+            pass
+        time.sleep(0.1)
 
+    continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
+    continue_button = driver.find_element(By.XPATH, continue_button_xpath)
+    continue_button.click()
+    log(profile, "Successfully clicked Continue.")
+    time.sleep(2)
 
+    input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
+    input_element = driver.find_element(By.XPATH, input_xpath)
+    random_text = ''.join(random.choices(
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10
+    ))
+    log(profile, f"Nhập text ngẫu nhiên: {random_text}")
+    input_element.send_keys(random_text)
+    time.sleep(2)
+    final_button_xpath = '//*[@id="__next"]/div[1]/main/div/div[2]/button[1]'
+    final_button = driver.find_element(By.XPATH, final_button_xpath)
+    final_button.click()
+    log(profile, "Successfully clicked final button.")
+    
+    
 def run_profile(profile, silent_jwt, index, columns, rows, window_width, window_height):
     """Hàm chạy trên mỗi luồng, khởi tạo driver, set vị trí/kích thước cửa sổ, rồi automation."""
     driver = contribute(silent_jwt, profile)
