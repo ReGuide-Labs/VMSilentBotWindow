@@ -3,8 +3,6 @@ import math
 import random
 import time
 import threading
-import ctypes
-import logging
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -15,11 +13,16 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Configure logger
-from selenium_helper import logger
+from colorama import Fore, Style  # Add colorama for colored output
+global_block_index = 0 
 
-def log(profile, message):
-    logger.info(f"[Profile: {profile}] {message}")
+def log(profile, message, logger=None, color=Fore.RESET):
+    """Log messages using the provided logger or print to console with color."""
+    log_message = f"{color}[Profile: {profile}] {message}{Style.RESET_ALL}"
+    if logger:
+        logger.info(log_message)
+    else:
+        print(log_message)
 
 def contribute(silent_jwt, profile):
 
@@ -91,7 +94,7 @@ class presence_of_any_element_located:
 
         return False
     
-def automation_interact(driver, profile, interval=10):
+def automation_interact(driver, profile, interval=10, logger=None, on_reset=None):
 
     wait = WebDriverWait(driver, 60)
 
@@ -107,80 +110,92 @@ def automation_interact(driver, profile, interval=10):
             )            
             if which_xpath == 'xpath1':
                 text_wait = found_element.text.lower()
-                print("Element wait_xpath đã xuất hiện trước:", found_element.text)
+                print("Element wait_xpath appeared first:", found_element.text)
             else:
                 text_ogp = found_element.text.lower()
-                print("Element ogps_earned_xpath đã xuất hiện trước:", found_element.text)
+                print("Element ogps_earned_xpath appeared first:", found_element.text)
             if "ogps" in text_ogp or "your time" not in text_wait:
-                log(profile, "Text 'OGPs earned' found or exited queue, starting button search.")
+                log(profile, "Text 'OGPs earned' found or exited queue, starting button search.", logger, color=Fore.GREEN)
 
                 button_found = False
-                for i in range(1, 11):
+                max_blocks = 10
+
+                # Dựa vào chỉ số toàn cục để bắt đầu block
+                for offset in range(max_blocks):
+                    i = (global_block_index + offset) % max_blocks + 1  # 1-based index
+
                     block_xpath = f'//*[@id="__next"]/main/div/div[2]/div[{i}]'
                     try:
                         element = driver.find_element(By.XPATH, block_xpath)
-                        log(profile, f"Tìm thấy block {i}: {element.text}")
+                        log(profile, f"Found block {i}: {element.text}", logger, color=Fore.GREEN)
 
-                        button_xpath = f'//*[@id="__next"]/main/div/div[2]/div[{i}]/div[2]/div[2]/button'
-
+                        button_xpath = f'{block_xpath}/div[2]/div[2]/button'
                         try:
                             button_element = driver.find_element(By.XPATH, button_xpath)
                             button_element.click()
-                            
-                            time.sleep(2)
-                            button_element.click()
-                            
-                            time.sleep(3)
-                            button_element.click()
-                            log(profile, f"Đã click button ở block {i}.")
-                            
-                            button_found = True
-                            time.sleep(10)
+                            log(profile, f"Clicked button in block {i}.", logger, color=Fore.GREEN)
+
+                            time.sleep(30)
 
                             continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
-                            continue_button = driver.find_element(By.XPATH, continue_button_xpath)
-                            if continue_button:
-                                if "continue" not in continue_button.text.lower():
-                                    button_element.click()
-                                    time.sleep(10)
-                                
-                            if "continue" in continue_button.text.lower():
-                                log(profile, "Continue button found. Bắt đầu random mouse move...")
-                                perform_random_interactions_and_submit(driver, profile)
-                                break
+                            try:
+                                continue_button = driver.find_element(By.XPATH, continue_button_xpath)
+                                if "continue" in continue_button.text.lower():
+                                    log(profile, "Continue button found. Starting random mouse move...", logger, color=Fore.GREEN)
+                                    perform_random_interactions_and_submit(driver, profile, logger)
+                                    button_found = True
+                                    global_block_index = (i % max_blocks)  # cập nhật cho profile tiếp theo
+                                    break
+                                else:
+                                    log(profile, "Continue button not valid.", logger, color=Fore.YELLOW)
 
-                        except Exception as e:
-                            log(profile, f"Block {i} already contributed, retrying next contribute...")
+                            except:
+                                log(profile, "Continue button not found.", logger, color=Fore.YELLOW)
+                                continue
+
+                        except Exception:
+                            log(profile, f"Block {i} already contributed or button not clickable. Skipping...", logger, color=Fore.RED)
                             continue
+
                     except:
-                        pass
+                        continue
 
                 if not button_found:
-                    log(profile, "Không tìm thấy button nào, reload trang.")
+                    log(profile, "No button found, reloading the page.", logger, color=Fore.RED)
                     driver.get("https://ceremony.silentprotocol.org/ceremonies")
                     continue
+
             else:
                 input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
                 try:
                     driver.find_element(By.XPATH, input_xpath)
-                    log(profile, "Tìm thấy input, reload.")
+                    log(profile, "Input found, reloading.", logger, color=Fore.GREEN)
                     driver.get("https://ceremony.silentprotocol.org/ceremonies")
                     continue
                 except:
-                    log(profile, "Không thấy input. Kiểm tra exit hoặc success...")        
+                    log(profile, "Input not found. Checking exit or success...", logger, color=Fore.RED)        
                     
         except Exception as e:
-            log(profile, "Not ready - 'OGPs earned' not found or still in queue.")
+            log(profile, "Not ready - 'OGPs earned' not found or still in queue.", logger, color=Fore.RED)
 
-            exit_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div/button'
+            bind_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]/div/div'
             try:
-                exit_button = driver.find_element(By.XPATH, exit_button_xpath)
-                exit_button.click()
-                log(profile, "Click Exit button -> Quit driver.")
-                driver.quit()
-                break
+                bind_element = driver.find_element(By.XPATH, bind_xpath)
+                bind_text = bind_element.text.lower()
+                log(profile, f"Bind text found: {bind_text}", logger, color=Fore.GREEN)
+                
+                if "you are behind" in bind_text:
+                    queue_number = int(''.join(filter(str.isdigit, bind_text.split("behind")[1])))
+                    log(profile, f"Queue number extracted: {queue_number}", logger, color=Fore.GREEN)
+                    
+                    if queue_number > 200:
+                        log(profile, "Queue number exceeds 200 -> Quitting driver.", logger, color=Fore.RED)
+                        driver.quit()
+                        if on_reset:
+                            on_reset()
+                        break
             except:
-                log(profile, "Không thấy Exit button, kiểm tra 'successfully uploaded'.")
+                log(profile, "Bind text not found or unable to check queue number.", logger, color=Fore.RED)
             try:
                 success_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]'
                 proccessed_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div/p'
@@ -198,25 +213,29 @@ def automation_interact(driver, profile, interval=10):
                     pass
 
                 if success_text_element and "successfully uploaded" in success_text_element.get_attribute('innerText'):
-                    log(profile, "Successfully exited or uploaded.")
+                    log(profile, "Successfully exited or uploaded.", logger, color=Fore.GREEN)
                     driver.quit()
+                    if on_reset:
+                        on_reset()
                     break
 
                 if proccessed_text_element and "processed" in proccessed_text_element.get_attribute('innerText').lower():
-                    log(profile, "Processed text found, exiting driver.")
+                    log(profile, "Processed text found, exiting driver.", logger, color=Fore.GREEN)
                     driver.quit()
+                    if on_reset:
+                        on_reset()
                     break
             except:
-                log(profile, "Chưa thấy 'successfully uploaded'. Chờ 30s...")
+                log(profile, "Did not find 'successfully uploaded'. Waiting 30s...", logger, color=Fore.RED)
                 
             if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower():
-                log(profile, "Driver is closed -> Break automation_interact.")
+                log(profile, "Driver is closed -> Break automation_interact.", logger, color=Fore.RED)
                 break
-            log(profile, f"Error while checking queue: {e}")
+            log(profile, f"Error while checking queue: {e}", logger, color=Fore.RED)
 
         time.sleep(interval)
         
-def perform_random_interactions_and_submit(driver, profile):
+def perform_random_interactions_and_submit(driver, profile, logger=None):
     end_time = time.time() + 5
     while time.time() < end_time:
         rand_index = random.randint(1, 1680)
@@ -231,7 +250,7 @@ def perform_random_interactions_and_submit(driver, profile):
     continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
     continue_button = driver.find_element(By.XPATH, continue_button_xpath)
     continue_button.click()
-    log(profile, "Successfully clicked Continue.")
+    log(profile, "Successfully clicked Continue.", logger, color=Fore.GREEN)
     time.sleep(2)
 
     input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
@@ -239,17 +258,17 @@ def perform_random_interactions_and_submit(driver, profile):
     random_text = ''.join(random.choices(
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10
     ))
-    log(profile, f"Nhập text ngẫu nhiên: {random_text}")
+    log(profile, f"Entered random text: {random_text}", logger, color=Fore.GREEN)
     input_element.send_keys(random_text)
     time.sleep(2)
     final_button_xpath = '//*[@id="__next"]/div[1]/main/div/div[2]/button[1]'
     final_button = driver.find_element(By.XPATH, final_button_xpath)
     final_button.click()
-    log(profile, "Successfully clicked final button.")
+    log(profile, "Successfully clicked final button.", logger, color=Fore.GREEN)
     
-    
-def run_profile(profile, silent_jwt, index, columns, rows, window_width, window_height):
-    """Hàm chạy trên mỗi luồng, khởi tạo driver, set vị trí/kích thước cửa sổ, rồi automation."""
+
+def run_profile(profile, silent_jwt, index, columns, rows, window_width, window_height, logger, on_reset=None):
+    """Run on each thread, initialize driver, set window position/size, then automate."""
     driver = contribute(silent_jwt, profile)
 
     row = index // columns
@@ -259,21 +278,18 @@ def run_profile(profile, silent_jwt, index, columns, rows, window_width, window_
 
     driver.set_window_position(x, y)
     driver.set_window_size(window_width, window_height)
-    log(profile, f"Cửa sổ đặt tại ({x},{y}), size = {window_width}x{window_height}")
+    log(profile, f"Window positioned at ({x},{y}), size = {window_width}x{window_height}", logger, color=Fore.GREEN)
 
-    automation_interact(driver, profile)
+    automation_interact(driver, profile, logger=logger, on_reset=on_reset)
 
 
-def run_profiles(profiles, silent_jwt):
+def run_profiles(profiles, silent_jwt, logger=None, on_reset=None):
 
-    user32 = ctypes.windll.user32
-    user32.SetProcessDPIAware()
+    screen_width = 1920
+    screen_height = 1080
+    print(f"Using default screen size: {screen_width}x{screen_height}")
 
-    screen_width = user32.GetSystemMetrics(0)
-    screen_height = user32.GetSystemMetrics(1)
-    print(f"Detected screen size: {screen_width}x{screen_height}")
-
-    total = 10
+    total = 5
     columns = math.ceil(math.sqrt(total))
     rows = math.ceil(total / columns)
 
@@ -288,7 +304,7 @@ def run_profiles(profiles, silent_jwt):
     for i, profile in enumerate(profiles):
         t = threading.Thread(
             target=run_profile,
-            args=(profile, silent_jwt, i, columns, rows, window_width, window_height)
+            args=(profile, silent_jwt, i, columns, rows, window_width, window_height, logger)
         )
         t.start()
         threads.append(t)

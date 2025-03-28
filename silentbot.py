@@ -3,17 +3,23 @@ import time
 import random
 import threading
 from telegram import Bot
-from selenium_script import contribute, automation_interact, run_profiles  # Import từ file chứa selenium
+from selenium_script import run_profiles  # Import từ file chứa selenium
 import http.client
 import json
 import asyncio  # Add this import
 from selenium_helper import logger  # Use logger from helper
+import logging  # Add logging module
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def worker_function(token, name):
     while True:
         position_result = get_position(token)
         ping_result = ping_server(token)
-
+        if not getattr(worker_function, f"{token}_automation_started", False):
+            logger.info(f"{name} is starting run_automation in a new thread")
+            threading.Thread(target=run_automation, args=(token, name)).start()
+            setattr(worker_function, f"{token}_automation_started", True)
         message = f"{name} is pinging {'successfully' if ping_result else 'failed'} | "
         if ping_result:
             message += f"Behind {position_result['behind']} users | Estimated wait time: {position_result['timeRemaining']}"
@@ -112,12 +118,23 @@ def load_tokens():
         return []
 
 
-def run_automation(token, name):
-    profiles = [name]
+def reset_automation_state(token):
+    """Reset the automation state for the given token."""
+    setattr(worker_function, f"{token}_automation_started", False)
+    logging.info(f"Automation state reset for token: {token}")  # Use logging for consistency
     
-    silent_jwt = token
+def run_automation(token, name):
+    def on_reset():
+        reset_automation_state(token)
 
-    run_profiles(profiles, silent_jwt)
+    profiles = [name]
+    silent_jwt = token
+    logger = logging.getLogger(name)
+    try:
+        run_profiles(profiles, silent_jwt, logger, on_reset)
+    finally:
+        setattr(worker_function, f"{token}_automation_started", False)
+
 if __name__ == "__main__":
     tokens = load_tokens()
     if not tokens:
