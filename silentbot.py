@@ -16,10 +16,10 @@ def worker_function(token, name):
     while True:
         position_result = get_position(token)
         ping_result = ping_server(token)
-        if not getattr(worker_function, f"{token}_automation_started", False):
-            logger.info(f"{name} is starting run_automation in a new thread")
-            threading.Thread(target=run_automation, args=(token, name)).start()
-            setattr(worker_function, f"{token}_automation_started", True)
+        # if not getattr(worker_function, f"{token}_automation_started", False):
+        #     logger.info(f"{name} is starting run_automation in a new thread")
+        #     threading.Thread(target=run_automation, args=(token, name)).start()
+        #     setattr(worker_function, f"{token}_automation_started", True)
         message = f"{name} is pinging {'successfully' if ping_result else 'failed'} | "
         if ping_result:
             message += f"Behind {position_result['behind']} users | Estimated wait time: {position_result['timeRemaining']}"
