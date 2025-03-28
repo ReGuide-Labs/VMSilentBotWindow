@@ -3,6 +3,7 @@ import math
 import random
 import time
 import threading
+from selenium.common.exceptions import NoSuchElementException, InvalidSessionIdException
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -42,6 +43,7 @@ def contribute(silent_jwt, profile):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument(f"--user-agent={user_agent}")
     options.add_argument("--disable-infobars")
+    options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
@@ -94,9 +96,24 @@ class presence_of_any_element_located:
 
         return False
     
+def find_and_click_continue_button(driver, profile, logger):
+    continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
+    try:
+        continue_button = driver.find_element(By.XPATH, continue_button_xpath)
+        if "continue" in continue_button.text.lower():
+            log(profile, "Continue button found. Starting random mouse move...", logger, color=Fore.GREEN)
+            perform_random_interactions_and_submit(driver, profile, logger)
+            return True
+        else:
+            log(profile, "Continue button not valid.", logger, color=Fore.YELLOW)
+    except NoSuchElementException:
+        log(profile, "Continue button not found.", logger, color=Fore.YELLOW)
+    return False
+
+
 def automation_interact(driver, profile, interval=10, logger=None, on_reset=None):
 
-    wait = WebDriverWait(driver, 60)
+    wait = WebDriverWait(driver, 30)
 
     while True:
         try:
@@ -137,23 +154,11 @@ def automation_interact(driver, profile, interval=10, logger=None, on_reset=None
 
                             time.sleep(30)
 
-                            continue_button_xpath = '//*[@id="__next"]/div[1]/div[2]/div[3]/button'
-                            try:
-                                continue_button = driver.find_element(By.XPATH, continue_button_xpath)
-                                if "continue" in continue_button.text.lower():
-                                    log(profile, "Continue button found. Starting random mouse move...", logger, color=Fore.GREEN)
-                                    perform_random_interactions_and_submit(driver, profile, logger)
-                                    button_found = True
-                                    global_block_index = (i % max_blocks)  # cập nhật cho profile tiếp theo
-                                    break
-                                else:
-                                    log(profile, "Continue button not valid.", logger, color=Fore.YELLOW)
-
-                            except:
-                                log(profile, "Continue button not found.", logger, color=Fore.YELLOW)
-                                continue
-
-                        except Exception:
+                            button_found = find_and_click_continue_button(driver, profile, logger)
+                            if button_found:
+                                global_block_index = (i % max_blocks)  # cập nhật cho profile tiếp theo
+                                break
+                        except Exception as e:
                             log(profile, f"Block {i} already contributed or button not clickable. Skipping...", logger, color=Fore.RED)
                             continue
 
@@ -163,18 +168,13 @@ def automation_interact(driver, profile, interval=10, logger=None, on_reset=None
                 if not button_found:
                     log(profile, "No button found, reloading the page.", logger, color=Fore.RED)
                     driver.get("https://ceremony.silentprotocol.org/ceremonies")
-                    continue
-
-            else:
-                input_xpath = '//*[@id="__next"]/div[1]/main/div/div[1]/div[1]/input'
-                try:
-                    driver.find_element(By.XPATH, input_xpath)
-                    log(profile, "Input found, reloading.", logger, color=Fore.GREEN)
-                    driver.get("https://ceremony.silentprotocol.org/ceremonies")
-                    continue
-                except:
-                    log(profile, "Input not found. Checking exit or success...", logger, color=Fore.RED)        
+                    continue     
                     
+        except InvalidSessionIdException:
+            log(profile, "Invalid session ID detected. Exiting automation_interact.", logger, color=Fore.RED)
+            if on_reset:
+                on_reset()
+            break
         except Exception as e:
             log(profile, "Not ready - 'OGPs earned' not found or still in queue.", logger, color=Fore.RED)
 
@@ -194,7 +194,7 @@ def automation_interact(driver, profile, interval=10, logger=None, on_reset=None
                         if on_reset:
                             on_reset()
                         break
-            except:
+            except NoSuchElementException:
                 log(profile, "Bind text not found or unable to check queue number.", logger, color=Fore.RED)
             try:
                 success_text_xpath = '//*[@id="__next"]/div[1]/div[2]/div[2]'
@@ -227,9 +227,21 @@ def automation_interact(driver, profile, interval=10, logger=None, on_reset=None
                     break
             except:
                 log(profile, "Did not find 'successfully uploaded'. Waiting 30s...", logger, color=Fore.RED)
+            xpath_expried = '//*[@id="__next"]/div[3]/div/div[4]/button/span'
                 
-            if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower() or "connection refused" in str(e).lower():
-                log(profile, "Driver is closed or connection refused -> Exiting automation_interact.", logger, color=Fore.RED)
+            try:
+                element = driver.find_element(By.XPATH, xpath_expried)
+                text_expried = element.text.lower()
+                if "login" in text_expried:
+                    log(profile, "Login button found! Close.", logger, color=Fore.RED)
+                    driver.quit()
+                    if on_reset:
+                        on_reset()
+                    break
+            except NoSuchElementException:
+                log(profile, "Token not expried. Keep going...", logger, color=Fore.RED)       
+            if "invalid session id" in str(e).lower():
+                log(profile, "Driver session invalid -> Exiting automation_interact.", logger, color=Fore.RED)
                 try:
                     driver.quit()
                 except Exception as quit_error:
