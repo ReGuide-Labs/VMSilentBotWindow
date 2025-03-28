@@ -1,5 +1,14 @@
 # VMSilentBot
+## Requirements
+1. Ref: https://ceremony.silentprotocol.org?ref=28952297
+1. Register **[Silent Protocol ](https://ceremony.silentprotocol.org?ref=28952297)**
+3. **Token** of **Silent Protocol**
 
+### Silent Token
+1. On the **Silent Protocol** page, press **Ctrl + Shift + I** or **F12** if using **Windows** and **Crtl + Shift + J** if using **macOS**
+2. Access the **Console** tab
+3. Type `localStorage.getItem('silent_jwt');`
+4. Copy the entire value `eyJhbGciOi.............` remember to remove the two ` `` ` marks at both ends
 ## Introduction
 VMSilentBot is an automation project using Selenium.
 
