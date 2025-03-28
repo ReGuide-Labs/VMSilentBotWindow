@@ -228,10 +228,17 @@ def automation_interact(driver, profile, interval=10, logger=None, on_reset=None
             except:
                 log(profile, "Did not find 'successfully uploaded'. Waiting 30s...", logger, color=Fore.RED)
                 
-            if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower():
-                log(profile, "Driver is closed -> Break automation_interact.", logger, color=Fore.RED)
+            if "no such window" in str(e).lower() or "unable to evaluate script" in str(e).lower() or "connection refused" in str(e).lower():
+                log(profile, "Driver is closed or connection refused -> Exiting automation_interact.", logger, color=Fore.RED)
+                try:
+                    driver.quit()
+                except Exception as quit_error:
+                    log(profile, f"Error while quitting driver: {quit_error}", logger, color=Fore.YELLOW)
+                if on_reset:
+                    on_reset()
                 break
-            log(profile, f"Error while checking queue: {e}", logger, color=Fore.RED)
+
+            log(profile, f"Checking waiting queue", logger, color=Fore.RED)
 
         time.sleep(interval)
         
